@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-7 col-lg-5">
+        <div class="text-center mb-4">
+            <h2 class="fw-bold text-dark">Pusat Bantuan</h2>
+            <p class="text-muted">Ada masalah? Sampaikan kepada kami dengan mengisi formulir di bawah ini.</p>
+        </div>
+        
+        <div class="glass-card p-4 p-md-5">
+            <form action="/create" method="POST" enctype="multipart/form-data">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control bg-light border-0" id="nrpInput" name="nrp" required placeholder="NRP Anda">
+                            <label for="nrpInput" class="text-muted"><i class="bi bi-person-badge me-1"></i>NRP</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control bg-light border-0" id="phoneInput" name="phone_number" required placeholder="Nomor HP">
+                            <label for="phoneInput" class="text-muted"><i class="bi bi-telephone me-1"></i>Nomor HP</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-floating mb-3">
+                    <input type="text" class="form-control bg-light border-0" id="titleInput" name="title" required placeholder="Judul Masalah">
+                    <label for="titleInput" class="text-muted">Judul Masalah</label>
+                </div>
+                
+                <div class="form-floating mb-3">
+                    <textarea class="form-control bg-light border-0" id="descInput" name="description" style="height: 150px" required placeholder="Detail Masalah"></textarea>
+                    <label for="descInput" class="text-muted">Jelaskan detail masalahnya secara lengkap...</label>
+                </div>
+                
+                <div class="mb-4 text-start">
+                    <label for="attachmentInput" class="form-label text-muted small"><i class="bi bi-image me-1"></i>Lampirkan Foto (Opsional)</label>
+                    <input type="file" class="form-control bg-light border-0" id="attachmentInput" name="attachment" accept="image/*">
+                </div>
+                
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary btn-lg rounded-pill fw-medium shadow-sm">
+                        <i class="bi bi-send-fill me-2"></i>Kirim Tiket
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="text-center mt-4">
+            <small class="text-muted"><i class="bi bi-shield-check me-1 text-success"></i> Laporan Anda akan segera ditangani oleh tim IT kami.</small>
+        </div>
+    </div>
+</div>
+{% endblock %}

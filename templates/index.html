@@ -1,0 +1,142 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold m-0"><i class="bi bi-kanban me-2 text-primary"></i>Dashboard Tiket</h3>
+</div>
+
+<div class="row gx-4">
+    {% for status, tickets in board.items() %}
+    <div class="col-md-3 mb-4">
+        <div class="kanban-column d-flex flex-column">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="text-uppercase kanban-header m-0">{{ status }}</span>
+                <span class="badge bg-secondary rounded-pill shadow-sm kanban-badge">{{ tickets|length }}</span>
+            </div>
+            
+            <div class="kanban-column-dropzone flex-grow-1" data-status="{{ status }}">
+                {% for ticket in tickets %}
+                <div class="ticket-card {% if status == 'Done' %}border-start border-4 border-success{% elif status == 'In Progress' %}border-start border-4 border-warning{% elif status == 'Review' %}border-start border-4 border-info{% else %}border-start border-4 border-primary{% endif %}" data-id="{{ ticket.id }}" style="cursor: grab;">
+                <h6 class="ticket-title mb-1">{{ ticket.title }}</h6>
+                
+                {% if ticket.nrp or ticket.phone_number %}
+                <div class="mb-3 text-muted" style="font-size: 0.75rem;">
+                    <i class="bi bi-person-badge me-1"></i> {{ ticket.nrp }} &nbsp;|&nbsp; 
+                    <i class="bi bi-telephone me-1"></i> {{ ticket.phone_number }}
+                </div>
+                {% else %}
+                <div class="mb-3"></div>
+                {% endif %}
+                
+                {% if ticket.attachment %}
+                <div class="mb-3 rounded overflow-hidden shadow-sm" style="max-height: 140px;">
+                    <a href="{{ url_for('static', filename='uploads/' + ticket.attachment) }}" target="_blank" title="Lihat ukuran penuh">
+                        <img src="{{ url_for('static', filename='uploads/' + ticket.attachment) }}" class="img-fluid w-100 object-fit-cover" alt="Lampiran Foto" style="height: 140px; object-fit: cover;">
+                    </a>
+                </div>
+                {% endif %}
+                
+                <p class="ticket-desc mb-3" style="white-space: pre-wrap;">{{ ticket.description }}</p>
+                <div class="d-flex justify-content-between align-items-center mt-auto">
+                    <span class="ticket-meta fw-medium"><i class="bi bi-tag-fill me-1 text-muted"></i>TKT-{{ ticket.id }}</span>
+                    
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="padding: 2px 8px;">
+                            <i class="bi bi-three-dots"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0 rounded-3">
+                            <li><h6 class="dropdown-header">Pindahkan ke:</h6></li>
+                            {% for s in ['To Do', 'In Progress', 'Review', 'Done'] %}
+                                {% if s != ticket.status %}
+                                <li>
+                                    <form action="/update/{{ ticket.id }}" method="POST">
+                                        <input type="hidden" name="status" value="{{ s }}">
+                                        <button type="submit" class="dropdown-item py-2 fw-medium text-secondary">
+                                            {% if s == 'To Do' %}<i class="bi bi-circle me-2 text-secondary"></i>
+                                            {% elif s == 'In Progress' %}<i class="bi bi-play-circle-fill me-2 text-warning"></i>
+                                            {% elif s == 'Review' %}<i class="bi bi-eye-fill me-2 text-info"></i>
+                                            {% elif s == 'Done' %}<i class="bi bi-check-circle-fill me-2 text-success"></i>{% endif %}
+                                            {{ s }}
+                                        </button>
+                                    </form>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <form action="/delete/{{ ticket.id }}" method="POST" onsubmit="return confirm('Hapus tiket ini secara permanen?');">
+                                    <button type="submit" class="dropdown-item text-danger py-2 fw-medium">
+                                        <i class="bi bi-trash3-fill me-2"></i>Hapus Tiket
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            </div>
+            
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Sortable JS -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const columns = document.querySelectorAll('.kanban-column-dropzone');
+        
+        columns.forEach(col => {
+            new Sortable(col, {
+                group: 'kanban',
+                animation: 150,
+                ghostClass: 'opacity-50',
+                onEnd: function(evt) {
+                    const itemEl = evt.item;
+                    const toColumn = evt.to;
+                    
+                    const ticketId = itemEl.getAttribute('data-id');
+                    const newStatus = toColumn.getAttribute('data-status');
+                    
+                    if (evt.from !== toColumn) {
+                        fetch(`/update_ajax/${ticketId}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ status: newStatus })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                // Update border color classes
+                                itemEl.classList.remove('border-primary', 'border-success', 'border-warning', 'border-info');
+                                if (newStatus === 'Done') itemEl.classList.add('border-success');
+                                else if (newStatus === 'In Progress') itemEl.classList.add('border-warning');
+                                else if (newStatus === 'Review') itemEl.classList.add('border-info');
+                                else itemEl.classList.add('border-primary');
+                                
+                                // Update badge counters
+                                const fromBadge = evt.from.parentElement.querySelector('.kanban-badge');
+                                const toBadge = toColumn.parentElement.querySelector('.kanban-badge');
+                                fromBadge.innerText = parseInt(fromBadge.innerText) - 1;
+                                toBadge.innerText = parseInt(toBadge.innerText) + 1;
+                            } else {
+                                alert('Gagal memindahkan tiket.');
+                                window.location.reload();
+                            }
+                        })
+                        .catch(err => {
+                            console.error(err);
+                            alert('Terjadi kesalahan jaringan.');
+                            window.location.reload();
+                        });
+                    }
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}
