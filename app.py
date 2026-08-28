@@ -35,7 +35,7 @@ class Ticket(db.Model):
     description = db.Column(db.Text, nullable=False)
     status = db.Column(db.String(20), nullable=False, default='To Do')
     attachment = db.Column(db.String(255), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
     def __repr__(self):
         return f'<Ticket {self.id}>'
@@ -44,7 +44,7 @@ class TicketHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     ticket_id = db.Column(db.Integer, db.ForeignKey('ticket.id'), nullable=False)
     status = db.Column(db.String(20), nullable=False)
-    changed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    changed_at = db.Column(db.DateTime, default=datetime.now)
     
     ticket = db.relationship('Ticket', backref=db.backref('history', lazy=True, order_by='TicketHistory.changed_at.desc()'))
 
@@ -97,26 +97,22 @@ def create():
         db.session.add(history)
         db.session.commit()
         
-        flash(f'Tiket berhasil diajukan! Nomor Tiket Anda: TKT-{new_ticket.id}. Harap simpan nomor ini untuk melacak status.', 'success')
+        flash(f'Tiket berhasil diajukan! Anda dapat melacak status pengaduan menggunakan NRP Anda ({nrp}).', 'success')
         
     return redirect(url_for('public_index'))
 
 @app.route('/track', methods=['GET'])
 def track():
-    ticket_id_query = request.args.get('ticket_id', '')
-    ticket = None
+    nrp_query = request.args.get('nrp', '').strip()
+    tickets = []
     error = None
     
-    if ticket_id_query:
-        try:
-            num = int(ticket_id_query.upper().replace('TKT-', '').strip())
-            ticket = Ticket.query.get(num)
-            if not ticket:
-                error = 'Tiket tidak ditemukan.'
-        except ValueError:
-            error = 'Format nomor tiket tidak valid. Contoh yang benar: TKT-1'
+    if nrp_query:
+        tickets = Ticket.query.filter_by(nrp=nrp_query).order_by(Ticket.created_at.desc()).all()
+        if not tickets:
+            error = f'Tidak ada tiket yang ditemukan untuk NRP: {nrp_query}'
             
-    return render_template('track.html', ticket=ticket, error=error, query=ticket_id_query)
+    return render_template('track.html', tickets=tickets, error=error, query=nrp_query)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
