@@ -5,6 +5,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime
 import os
+import requests
+import threading
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key_here'
@@ -67,6 +69,39 @@ with app.app_context():
 def public_index():
     return render_template('public.html')
 
+def send_wa_notification(ticket_id, nrp, title, dt):
+    # Menggunakan layanan API Fonnte.com (gratis/populer di Indonesia)
+    # Anda harus mendaftar di fonnte.com dan menempelkan TOKEN Anda di bawah ini
+    TOKEN = "SJd6SfwTZ8ZxecUfmEhN" 
+    TARGET_PHONE = "6285177825450"
+    
+    if TOKEN == "ISI_TOKEN_FONNTE_ANDA_DISINI":
+        print("Notifikasi WA dibatalkan: Token Fonnte belum diisi.")
+        return
+        
+    pesan = (
+        f"*🚨 TIKET BARU MASUK! 🚨*\n\n"
+        f"*ID Tiket:* TKT-{ticket_id}\n"
+        f"*NRP:* {nrp}\n"
+        f"*Judul:* {title}\n"
+        f"*Waktu:* {dt}\n\n"
+        f"Silakan buka Dashboard Admin untuk detail lebih lanjut."
+    )
+    
+    try:
+        response = requests.post(
+            'https://api.fonnte.com/send',
+            headers={'Authorization': TOKEN},
+            data={
+                'target': TARGET_PHONE,
+                'message': pesan,
+                'countryCode': '62'
+            }
+        )
+        print("Respons WA:", response.text)
+    except Exception as e:
+        print("Error kirim WA:", e)
+
 @app.route('/create', methods=['POST'])
 def create():
     nrp = request.form.get('nrp')
@@ -96,6 +131,10 @@ def create():
         history = TicketHistory(ticket_id=new_ticket.id, status='To Do')
         db.session.add(history)
         db.session.commit()
+        
+        # Kirim notifikasi WA berjalan di background (agar loading web tidak terhambat)
+        dt_str = new_ticket.created_at.strftime('%d %b %Y %H:%M')
+        threading.Thread(target=send_wa_notification, args=(new_ticket.id, nrp, title, dt_str)).start()
         
         flash(f'Tiket berhasil diajukan! Anda dapat melacak status pengaduan menggunakan NRP Anda ({nrp}).', 'success')
         
