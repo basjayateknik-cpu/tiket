@@ -228,6 +228,8 @@ def update(id):
 @login_required
 def delete(id):
     ticket = Ticket.query.get_or_404(id)
+    # Hapus riwayat tiket terlebih dahulu untuk menghindari IntegrityError
+    TicketHistory.query.filter_by(ticket_id=ticket.id).delete()
     db.session.delete(ticket)
     db.session.commit()
     return redirect(url_for('dashboard'))
