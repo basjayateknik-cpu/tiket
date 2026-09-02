@@ -16,7 +16,17 @@
             
             <div class="kanban-column-dropzone flex-grow-1" data-status="{{ status }}">
                 {% for ticket in tickets %}
-                <div class="ticket-card {% if status == 'Done' %}border-start border-4 border-success{% elif status == 'In Progress' %}border-start border-4 border-warning{% elif status == 'Review' %}border-start border-4 border-info{% else %}border-start border-4 border-primary{% endif %}" data-id="{{ ticket.id }}" style="cursor: grab;">
+                <div class="ticket-card {% if status == 'Done' %}border-start border-4 border-success{% elif status == 'In Progress' %}border-start border-4 border-warning{% elif status == 'Review' %}border-start border-4 border-info{% else %}border-start border-4 border-primary{% endif %}" 
+                     data-id="{{ ticket.id }}" 
+                     data-title="{{ ticket.title }}"
+                     data-nrp="{{ ticket.nrp or '-' }}"
+                     data-phone="{{ ticket.phone_number or '-' }}"
+                     data-status="{{ ticket.status }}"
+                     data-date="{{ ticket.created_at.strftime('%d %b %Y %H:%M') }}"
+                     {% if ticket.attachment %}data-attachment="{{ url_for('static', filename='uploads/' + ticket.attachment) }}"{% endif %}
+                     style="cursor: grab;"
+                     onclick="showTicketModal(this)">
+                <div class="d-none ticket-full-desc">{{ ticket.description }}</div>
                 <h6 class="ticket-title mb-1">{{ ticket.title }}</h6>
                 
                 {% if ticket.nrp or ticket.phone_number %}
@@ -29,7 +39,7 @@
                 {% endif %}
                 
                 {% if ticket.attachment %}
-                <div class="mb-3 rounded overflow-hidden shadow-sm" style="max-height: 140px;">
+                <div class="mb-3 rounded overflow-hidden shadow-sm" style="max-height: 140px;" onclick="event.stopPropagation()">
                     <a href="{{ url_for('static', filename='uploads/' + ticket.attachment) }}" target="_blank" title="Lihat ukuran penuh">
                         <img src="{{ url_for('static', filename='uploads/' + ticket.attachment) }}" class="img-fluid w-100 object-fit-cover" alt="Lampiran Foto" style="height: 140px; object-fit: cover;">
                     </a>
@@ -40,7 +50,7 @@
                 <div class="d-flex justify-content-between align-items-center mt-auto">
                     <span class="ticket-meta fw-medium"><i class="bi bi-tag-fill me-1 text-muted"></i>TKT-{{ ticket.id }}</span>
                     
-                    <div class="dropdown">
+                    <div class="dropdown" onclick="event.stopPropagation()">
                         <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="padding: 2px 8px;">
                             <i class="bi bi-three-dots"></i>
                         </button>
@@ -81,6 +91,108 @@
     </div>
     {% endfor %}
 </div>
+
+<!-- Ticket Detail Modal -->
+<div class="modal fade" id="ticketDetailModal" tabindex="-1" aria-labelledby="ticketDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-bottom-0 bg-light pb-0">
+                <h5 class="modal-title fw-bold" id="ticketDetailModalLabel">Detail Tiket</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body pt-3">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h4 id="modalTicketTitle" class="fw-bold mb-1"></h4>
+                        <span class="badge bg-primary rounded-pill shadow-sm" id="modalTicketStatus"></span>
+                        <span class="text-muted ms-2" style="font-size: 0.85rem;" id="modalTicketId"></span>
+                    </div>
+                    <div class="text-end text-muted" style="font-size: 0.85rem;">
+                        <i class="bi bi-clock me-1"></i> <span id="modalTicketDate"></span>
+                    </div>
+                </div>
+                
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="p-3 bg-light rounded-3">
+                            <div class="mb-2">
+                                <span class="text-muted d-block" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">NRP</span>
+                                <span id="modalTicketNrp" class="fw-medium"></span>
+                            </div>
+                            <div>
+                                <span class="text-muted d-block" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">No. WhatsApp</span>
+                                <span id="modalTicketPhone" class="fw-medium"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <h6 class="fw-bold text-uppercase text-muted" style="font-size: 0.8rem; letter-spacing: 0.5px;">Deskripsi</h6>
+                    <p id="modalTicketDesc" class="mb-0" style="white-space: pre-wrap; line-height: 1.6;"></p>
+                </div>
+                
+                <div id="modalTicketAttachmentContainer" class="d-none">
+                    <h6 class="fw-bold text-uppercase text-muted mb-3" style="font-size: 0.8rem; letter-spacing: 0.5px;">Lampiran</h6>
+                    <a id="modalTicketAttachmentLink" href="#" target="_blank">
+                        <img id="modalTicketAttachmentImg" src="" class="img-fluid rounded shadow-sm w-100" alt="Lampiran">
+                    </a>
+                </div>
+            </div>
+            <div class="modal-footer border-top-0 bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function showTicketModal(element) {
+        // Retrieve data from attributes
+        const id = element.getAttribute('data-id');
+        const title = element.getAttribute('data-title');
+        const status = element.getAttribute('data-status');
+        const nrp = element.getAttribute('data-nrp');
+        const phone = element.getAttribute('data-phone');
+        const date = element.getAttribute('data-date');
+        const attachment = element.getAttribute('data-attachment');
+        
+        // Retrieve description from the hidden div
+        const descDiv = element.querySelector('.ticket-full-desc');
+        const desc = descDiv ? descDiv.innerHTML : '';
+
+        // Update modal DOM
+        document.getElementById('modalTicketId').innerText = 'TKT-' + id;
+        document.getElementById('modalTicketTitle').innerText = title;
+        document.getElementById('modalTicketStatus').innerText = status;
+        document.getElementById('modalTicketNrp').innerText = nrp;
+        document.getElementById('modalTicketPhone').innerText = phone;
+        document.getElementById('modalTicketDate').innerText = date;
+        document.getElementById('modalTicketDesc').innerText = desc;
+        
+        // Update badge color based on status
+        const statusBadge = document.getElementById('modalTicketStatus');
+        statusBadge.className = 'badge rounded-pill shadow-sm';
+        if (status === 'Done') statusBadge.classList.add('bg-success');
+        else if (status === 'In Progress') statusBadge.classList.add('bg-warning', 'text-dark');
+        else if (status === 'Review') statusBadge.classList.add('bg-info', 'text-dark');
+        else statusBadge.classList.add('bg-primary');
+
+        // Attachment handling
+        const attachmentContainer = document.getElementById('modalTicketAttachmentContainer');
+        if (attachment && attachment !== 'None' && attachment !== '') {
+            attachmentContainer.classList.remove('d-none');
+            document.getElementById('modalTicketAttachmentImg').src = attachment;
+            document.getElementById('modalTicketAttachmentLink').href = attachment;
+        } else {
+            attachmentContainer.classList.add('d-none');
+        }
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('ticketDetailModal'));
+        modal.show();
+    }
+</script>
 
 <!-- Sortable JS -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
