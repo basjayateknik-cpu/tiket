@@ -102,6 +102,38 @@ def send_wa_notification(ticket_id, nrp, title, dt):
     except Exception as e:
         print("Error kirim WA:", e)
 
+def send_wa_done_notification(ticket_id, phone, title, message):
+    TOKEN = "SJd6SfwTZ8ZxecUfmEhN"
+    
+    if not phone:
+        print("Notifikasi WA Done dibatalkan: Nomor telepon tidak ada.")
+        return
+        
+    if phone.startswith('0'):
+        phone = '62' + phone[1:]
+        
+    pesan = (
+        f"*✅ TIKET SELESAI! ✅*\n\n"
+        f"*ID Tiket:* TKT-{ticket_id}\n"
+        f"*Judul:* {title}\n\n"
+        f"*Pesan dari Tim:*\n{message}\n\n"
+        f"Terima kasih."
+    )
+    
+    try:
+        response = requests.post(
+            'https://api.fonnte.com/send',
+            headers={'Authorization': TOKEN},
+            data={
+                'target': phone,
+                'message': pesan,
+                'countryCode': '62'
+            }
+        )
+        print("Respons WA Done:", response.text)
+    except Exception as e:
+        print("Error kirim WA Done:", e)
+
 @app.route('/create', methods=['POST'])
 def create():
     nrp = request.form.get('nrp')
@@ -201,12 +233,17 @@ def update_ajax(id):
     ticket = Ticket.query.get_or_404(id)
     data = request.get_json()
     new_status = data.get('status')
+    message = data.get('message', '')
     
     if new_status in ['To Do', 'In Progress', 'Review', 'Done'] and ticket.status != new_status:
         ticket.status = new_status
         history = TicketHistory(ticket_id=ticket.id, status=new_status)
         db.session.add(history)
         db.session.commit()
+        
+        if new_status == 'Done' and message:
+            threading.Thread(target=send_wa_done_notification, args=(ticket.id, ticket.phone_number, ticket.title, message)).start()
+            
         return {'success': True}
     return {'success': False}, 400
 
@@ -215,6 +252,7 @@ def update_ajax(id):
 def update(id):
     ticket = Ticket.query.get_or_404(id)
     new_status = request.form.get('status')
+    message = request.form.get('message', '')
     
     if new_status in ['To Do', 'In Progress', 'Review', 'Done'] and ticket.status != new_status:
         ticket.status = new_status
@@ -222,6 +260,9 @@ def update(id):
         db.session.add(history)
         db.session.commit()
         
+        if new_status == 'Done' and message:
+            threading.Thread(target=send_wa_done_notification, args=(ticket.id, ticket.phone_number, ticket.title, message)).start()
+            
     return redirect(url_for('dashboard'))
 
 @app.route('/delete/<int:id>', methods=['POST'])

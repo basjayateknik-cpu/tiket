@@ -59,16 +59,21 @@
                             {% for s in ['To Do', 'In Progress', 'Review', 'Done'] %}
                                 {% if s != ticket.status %}
                                 <li>
+                                    {% if s == 'Done' %}
+                                    <button type="button" class="dropdown-item py-2 fw-medium text-secondary" onclick="promptDoneModal('{{ ticket.id }}', 'dropdown', event)">
+                                        <i class="bi bi-check-circle-fill me-2 text-success"></i> Done
+                                    </button>
+                                    {% else %}
                                     <form action="/update/{{ ticket.id }}" method="POST">
                                         <input type="hidden" name="status" value="{{ s }}">
                                         <button type="submit" class="dropdown-item py-2 fw-medium text-secondary">
                                             {% if s == 'To Do' %}<i class="bi bi-circle me-2 text-secondary"></i>
                                             {% elif s == 'In Progress' %}<i class="bi bi-play-circle-fill me-2 text-warning"></i>
-                                            {% elif s == 'Review' %}<i class="bi bi-eye-fill me-2 text-info"></i>
-                                            {% elif s == 'Done' %}<i class="bi bi-check-circle-fill me-2 text-success"></i>{% endif %}
+                                            {% elif s == 'Review' %}<i class="bi bi-eye-fill me-2 text-info"></i>{% endif %}
                                             {{ s }}
                                         </button>
                                     </form>
+                                    {% endif %}
                                 </li>
                                 {% endif %}
                             {% endfor %}
@@ -194,9 +199,120 @@
     }
 </script>
 
+<!-- Done Message Modal -->
+<div class="modal fade" id="doneMessageModal" tabindex="-1" aria-labelledby="doneMessageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fw-bold" id="doneMessageModalLabel"><i class="bi bi-check-circle-fill me-2"></i>Tiket Selesai</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="cancelDoneAction()"></button>
+            </div>
+            <div class="modal-body">
+                <p>Silakan masukkan pesan penyelesaian yang akan dikirimkan ke pembuat tiket via WhatsApp:</p>
+                <textarea id="doneMessageInput" class="form-control" rows="4" placeholder="Misal: Perbaikan telah selesai dilakukan. Silakan cek kembali."></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" onclick="cancelDoneAction()">Batal</button>
+                <button type="button" class="btn btn-success" onclick="submitDoneAction()">Kirim & Selesaikan</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Sortable JS -->
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 <script>
+    let pendingDoneAction = null;
+    let pendingDoneModal = null;
+
+    function promptDoneModal(ticketId, triggerType, event, evtDrag = null) {
+        if (event) event.stopPropagation();
+        
+        pendingDoneAction = {
+            ticketId: ticketId,
+            triggerType: triggerType,
+            evtDrag: evtDrag
+        };
+        
+        document.getElementById('doneMessageInput').value = '';
+        if (!pendingDoneModal) {
+            pendingDoneModal = new bootstrap.Modal(document.getElementById('doneMessageModal'), { backdrop: 'static' });
+        }
+        pendingDoneModal.show();
+    }
+    
+    function cancelDoneAction() {
+        if (pendingDoneAction && pendingDoneAction.triggerType === 'drag') {
+            const evt = pendingDoneAction.evtDrag;
+            evt.from.appendChild(evt.item);
+        }
+        pendingDoneAction = null;
+    }
+
+    function submitDoneAction() {
+        const msg = document.getElementById('doneMessageInput').value;
+        if (!pendingDoneAction) return;
+        
+        const ticketId = pendingDoneAction.ticketId;
+        
+        if (pendingDoneAction.triggerType === 'dropdown') {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/update/${ticketId}`;
+            
+            const inputStatus = document.createElement('input');
+            inputStatus.type = 'hidden';
+            inputStatus.name = 'status';
+            inputStatus.value = 'Done';
+            form.appendChild(inputStatus);
+            
+            const inputMsg = document.createElement('input');
+            inputMsg.type = 'hidden';
+            inputMsg.name = 'message';
+            inputMsg.value = msg;
+            form.appendChild(inputMsg);
+            
+            document.body.appendChild(form);
+            form.submit();
+        } else if (pendingDoneAction.triggerType === 'drag') {
+            const evt = pendingDoneAction.evtDrag;
+            const itemEl = evt.item;
+            const toColumn = evt.to;
+            const newStatus = toColumn.getAttribute('data-status');
+            
+            fetch(`/update_ajax/${ticketId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ status: newStatus, message: msg })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    itemEl.classList.remove('border-primary', 'border-success', 'border-warning', 'border-info');
+                    itemEl.classList.add('border-success');
+                    
+                    const fromBadge = evt.from.parentElement.querySelector('.kanban-badge');
+                    const toBadge = toColumn.parentElement.querySelector('.kanban-badge');
+                    fromBadge.innerText = parseInt(fromBadge.innerText) - 1;
+                    toBadge.innerText = parseInt(toBadge.innerText) + 1;
+                } else {
+                    alert('Gagal memindahkan tiket.');
+                    window.location.reload();
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Terjadi kesalahan jaringan.');
+                window.location.reload();
+            });
+            
+            if (pendingDoneModal) pendingDoneModal.hide();
+            pendingDoneAction = null;
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         const columns = document.querySelectorAll('.kanban-column-dropzone');
         
@@ -213,38 +329,40 @@
                     const newStatus = toColumn.getAttribute('data-status');
                     
                     if (evt.from !== toColumn) {
-                        fetch(`/update_ajax/${ticketId}`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ status: newStatus })
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                // Update border color classes
-                                itemEl.classList.remove('border-primary', 'border-success', 'border-warning', 'border-info');
-                                if (newStatus === 'Done') itemEl.classList.add('border-success');
-                                else if (newStatus === 'In Progress') itemEl.classList.add('border-warning');
-                                else if (newStatus === 'Review') itemEl.classList.add('border-info');
-                                else itemEl.classList.add('border-primary');
-                                
-                                // Update badge counters
-                                const fromBadge = evt.from.parentElement.querySelector('.kanban-badge');
-                                const toBadge = toColumn.parentElement.querySelector('.kanban-badge');
-                                fromBadge.innerText = parseInt(fromBadge.innerText) - 1;
-                                toBadge.innerText = parseInt(toBadge.innerText) + 1;
-                            } else {
-                                alert('Gagal memindahkan tiket.');
+                        if (newStatus === 'Done') {
+                            promptDoneModal(ticketId, 'drag', null, evt);
+                        } else {
+                            fetch(`/update_ajax/${ticketId}`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ status: newStatus })
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    itemEl.classList.remove('border-primary', 'border-success', 'border-warning', 'border-info');
+                                    if (newStatus === 'Done') itemEl.classList.add('border-success');
+                                    else if (newStatus === 'In Progress') itemEl.classList.add('border-warning');
+                                    else if (newStatus === 'Review') itemEl.classList.add('border-info');
+                                    else itemEl.classList.add('border-primary');
+                                    
+                                    const fromBadge = evt.from.parentElement.querySelector('.kanban-badge');
+                                    const toBadge = toColumn.parentElement.querySelector('.kanban-badge');
+                                    fromBadge.innerText = parseInt(fromBadge.innerText) - 1;
+                                    toBadge.innerText = parseInt(toBadge.innerText) + 1;
+                                } else {
+                                    alert('Gagal memindahkan tiket.');
+                                    window.location.reload();
+                                }
+                            })
+                            .catch(err => {
+                                console.error(err);
+                                alert('Terjadi kesalahan jaringan.');
                                 window.location.reload();
-                            }
-                        })
-                        .catch(err => {
-                            console.error(err);
-                            alert('Terjadi kesalahan jaringan.');
-                            window.location.reload();
-                        });
+                            });
+                        }
                     }
                 }
             });
